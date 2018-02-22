@@ -904,6 +904,8 @@ void Commissioner::HandleDatasetChanged(Coap::Header &aHeader, Message &aMessage
 
     otLogInfoMeshCoP(GetInstance(), "sent dataset changed acknowledgment");
 #if ENABLE_DEBUG
+    /* overhead statictics */
+    meshcopMsgCnt++;
     otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MESH_COP, "[OT-Comm]: Tx D-changed-ACK\n");
 #endif
 

@@ -1811,7 +1811,7 @@ void MleRouter::UpdateRoutes(const RouteTlv &aRoute, uint8_t aRouterId)
     otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MLE, " ID NH RC LC NHLC\n");//InLinkQ  OutLinkQ\n");    
     // resolve border router EID to RLOC16
     ot::Ip6::Address borderIP;
-    otIp6AddressFromString("fdde:ad00:beef:0000:c684:4ab6:ac8f:9fe5", &borderIP);
+    otIp6AddressFromString("fdde:ad00:beef:0000:8a1e:671f:0402:fdbe", &borderIP);
     otShortAddress borderRloc16;
     GetNetif().GetAddressResolver().Resolve(borderIP, borderRloc16);
 #endif

@@ -1008,12 +1008,14 @@ void Mac::BeginTransmit(void)
         if (applyTransmitSecurity)
         {
             // Security Processing
+//otPlatLEDON();
             ProcessTransmitSecurity(sendFrame);
+//otPlatLEDOFF();
         }
     }
 
-    error = RadioReceive(sendFrame.GetChannel());
-    assert(error == OT_ERROR_NONE);
+    //error = RadioReceive(sendFrame.GetChannel());
+    //assert(error == OT_ERROR_NONE);
 
     error = RadioTransmit(&sendFrame);
     assert(error == OT_ERROR_NONE);
