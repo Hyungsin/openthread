@@ -70,8 +70,11 @@ namespace Mac {
  */
 enum
 {
-    kMinBE                = 3,                     ///< macMinBE (IEEE 802.15.4-2006)
-    kMaxBE                = 5,                     ///< macMaxBE (IEEE 802.15.4-2006)
+    /* hskim: provide larger backoff exponent */
+    kMinBE                = 5,                     ///< macMinBE (IEEE 802.15.4-2006)
+    kMaxBE                = 8,                     ///< macMaxBE (IEEE 802.15.4-2006)
+    //kMinBE                = 3,                     ///< macMinBE (IEEE 802.15.4-2006)
+    //kMaxBE                = 5,                     ///< macMaxBE (IEEE 802.15.4-2006)
     kMaxCSMABackoffs      = 4,                     ///< macMaxCSMABackoffs (IEEE 802.15.4-2006)
     kUnitBackoffPeriod    = 20,                    ///< Number of symbols (IEEE 802.15.4-2006)
 
