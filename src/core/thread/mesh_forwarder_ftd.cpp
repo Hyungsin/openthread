@@ -747,6 +747,17 @@ otError MeshForwarder::UpdateMeshRoute(Message &aMessage)
     mMeshDest = meshHeader.GetDestination();
     mMeshSource = meshHeader.GetSource();
 
+#if ENABLE_DEBUG
+    if (mMacDest.GetShort() != mMeshDest) {
+        otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_IP6, "    -- %4x (Inter)\n", 
+                  mMacDest.GetShort());
+    }
+    else {
+        otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_IP6, "     -- %4x (FD)\n",
+                  mMacDest.GetShort());
+    }
+#endif
+
 exit:
     return error;
 }
