@@ -1254,13 +1254,15 @@ void Mac::HandleTransmitDone(otRadioFrame *aFrame, otRadioFrame *aAckFrame, otEr
             packetBusyChannelCnt++;
         }
     }
+    packetReTxCnt = mCounters.mTxAckRequested + mCounters.mTxRetry;
     broadcastCnt = mCounters.mTxNoAckRequested;
 
 
 #if ENABLE_DEBUG
     otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MAC, "--- [Link] ---\n");
-    otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MAC, "Uni: (%lu,%lu,%lu)/%lu\n", 
-           mCounters.mTxAcked, packetBusyChannelCnt, packetFailCnt, mCounters.mTxAckRequested);
+    otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MAC, "Uni: (%lu,%lu,%lu,%lu)/%lu\n", 
+           packetReTxCnt, mCounters.mTxAcked,
+           packetBusyChannelCnt, packetFailCnt, mCounters.mTxAckRequested);
     otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MAC, "Bro: %lu\n", mCounters.mTxNoAckRequested); 
     otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MAC, "--------------\n\n");
 #endif
