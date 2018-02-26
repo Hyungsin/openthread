@@ -1832,19 +1832,19 @@ void MleRouter::UpdateRoutes(const RouteTlv &aRoute, uint8_t aRouterId)
                      GetLinkCost(i), mRouters[i].GetLinkInfo().GetLinkQuality(),
                      mRouters[i].GetLinkQualityOut());
 #if ENABLE_DEBUG
-        if (GetRloc16(i) == borderRloc16) { 
-            otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MLE, "RT %x: %x %d %d %d RT\n",
-                     GetRloc16(i),
-                     GetRloc16(mRouters[i].GetNextHop()),
-                     mRouters[i].GetCost(), GetLinkCost(mRouters[i].GetNextHop()),
-                     GetLinkCost(i)); 
+        if (GetRloc16(i) == borderRloc16) {
             if (nextHopRloc != GetNextHop(GetRloc16(i))) {
                 borderRouteChangeCnt++;
                 nextHopRloc = GetNextHop(GetRloc16(i));
             }
-            borderRouterLC = GetLinkCost(i);
-            borderRouterRC = mRouters[i].GetCost() + GetLinkCost(mRouters[i].GetNextHop());
-            otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MLE, "Next Hop RLOC: %x\n", nextHopRloc);
+            borderRouterLC = GetLinkCost(mRouters[i].GetNextHop());
+            if (GetRloc16(i) != nextHopRloc) {
+                borderRouterRC = mRouters[i].GetCost();
+            } else {
+                borderRouterRC = 0;
+            }
+            otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MLE, "RT %x: %x %d %d %d RT\n",
+                     GetRloc16(i), nextHopRloc, borderRouterRC, borderRouterLC, GetLinkCost(i)); 
         }
         if (GetLinkCost(i) < 16) {
             otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MLE, "NT %x: %d NT\n",
