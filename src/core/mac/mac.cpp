@@ -860,11 +860,11 @@ void Mac::StartCsmaBackoff(void)
         }
 
         /* hskim: we do unslotted CSMA */
-        backoff = (static_cast<uint32_t>(kUnitBackoffPeriod) * (1UL << backoffExponent) *
-                   OT_RADIO_SYMBOL_TIME);
-        backoff = (otPlatRandomGet() % backoff);
-        //backoff = (otPlatRandomGet() % (1UL << backoffExponent));
-        //backoff *= (static_cast<uint32_t>(kUnitBackoffPeriod) * OT_RADIO_SYMBOL_TIME);
+        //backoff = (static_cast<uint32_t>(kUnitBackoffPeriod) * (1UL << backoffExponent) *
+        //           OT_RADIO_SYMBOL_TIME);
+        //backoff = (otPlatRandomGet() % backoff);
+        backoff = (otPlatRandomGet() % (1UL << backoffExponent));
+        backoff *= (static_cast<uint32_t>(kUnitBackoffPeriod) * OT_RADIO_SYMBOL_TIME);
 
         // Put the radio in either sleep or receive mode depending on
         // `mRxOnWhenIdle` flag before starting the backoff timer.
