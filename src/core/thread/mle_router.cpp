@@ -1837,11 +1837,12 @@ void MleRouter::UpdateRoutes(const RouteTlv &aRoute, uint8_t aRouterId)
                 borderRouteChangeCnt++;
                 nextHopRloc = GetNextHop(GetRloc16(i));
             }
-            borderRouterLC = GetLinkCost(mRouters[i].GetNextHop());
             if (GetRloc16(i) != nextHopRloc) {
                 borderRouterRC = mRouters[i].GetCost();
+                borderRouterLC = GetLinkCost(mRouters[i].GetNextHop());
             } else {
                 borderRouterRC = 0;
+                borderRouterLC = GetLinkCost(i);
             }
             otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MLE, "RT %x: %x %d %d %d RT\n",
                      GetRloc16(i), nextHopRloc, borderRouterRC, borderRouterLC, GetLinkCost(i)); 
