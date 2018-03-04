@@ -83,6 +83,7 @@
 extern uint16_t myRloc;               // RLOC16 of current node
 
 /* Link layer performance */
+extern uint32_t packetReTxArray[11];
 extern uint32_t packetReTxCnt;        // packet retx counter
 extern uint32_t packetSuccessCnt;     // packet success counter
 extern uint32_t packetFailCnt;        // packet fail (reTx failure) counter

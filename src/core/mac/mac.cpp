@@ -1196,6 +1196,11 @@ void Mac::HandleTransmitDone(otRadioFrame *aFrame, otRadioFrame *aAckFrame, otEr
         OT_UNUSED_VARIABLE(stringBuffer);
     }
 
+    /* Overhead statistics */
+    if (ackRequested && aError == OT_ERROR_NONE) {
+        packetReTxArray[mTransmitAttempts-1]++;
+    }
+
     mTransmitAttempts = 0;
 
     // Process the ack frame for "frame pending".
@@ -1263,6 +1268,11 @@ void Mac::HandleTransmitDone(otRadioFrame *aFrame, otRadioFrame *aAckFrame, otEr
     otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MAC, "Uni: (%lu,%lu,%lu,%lu)/%lu\n", 
            packetReTxCnt, mCounters.mTxAcked,
            packetBusyChannelCnt, packetFailCnt, mCounters.mTxAckRequested);
+    otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MAC, "ReTx Dist: (");
+    for (int i=0; i<10; i++) {
+        otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MAC, "%lu,", packetReTxArray[i]);
+    }
+    otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MAC, "%lu)\n", packetFailCnt);
     otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MAC, "Bro: %lu\n", mCounters.mTxNoAckRequested); 
     otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MAC, "--------------\n\n");
 #endif
