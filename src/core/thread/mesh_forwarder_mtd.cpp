@@ -37,20 +37,33 @@
 
 #include "mesh_forwarder.hpp"
 
+extern "C" {
+    void openthread_lock_buffer_mutex(void);
+    void openthread_unlock_buffer_mutex(void);
+}
+
 namespace ot {
 
 otError MeshForwarder::SendMessage(Message &aMessage)
 {
     otError error;
+    bool lock = false;
 
     aMessage.SetDirectTransmission();
     aMessage.SetOffset(0);
     aMessage.SetDatagramTag(0);
 
+    openthread_lock_buffer_mutex();
+    lock = true;
     SuccessOrExit(error = mSendQueue.Enqueue(aMessage));
+    lock = false;
+    openthread_unlock_buffer_mutex();
     mScheduleTransmissionTask.Post();
 
 exit:
+    if (lock) {
+        openthread_unlock_buffer_mutex();
+    }
     return error;
 }
 

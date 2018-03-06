@@ -40,6 +40,13 @@
 #include "common/instance.hpp"
 #include "common/logging.hpp"
 #include "net/ip6.hpp"
+#include "irq.h"
+
+extern "C" {
+    void openthread_lock_buffer_mutex(void);
+    void openthread_unlock_buffer_mutex(void);
+    int check_irq_is_in(void);
+}
 
 #define ENABLE_DEBUG (0)
 
@@ -70,10 +77,16 @@ MessagePool::MessagePool(Instance &aInstance) :
 Message *MessagePool::New(uint8_t aType, uint16_t aReserved)
 {
     Message *message = NULL;
+    bool lock = false;
 
     SuccessOrExit(ReclaimBuffers(1));
 
+    openthread_lock_buffer_mutex();
+    lock = true;
+
     VerifyOrExit((message = static_cast<Message *>(NewBuffer())) != NULL);
+    lock = false;
+    openthread_unlock_buffer_mutex();
 
     memset(message, 0, sizeof(*message));
     message->SetMessagePool(this);
@@ -89,11 +102,15 @@ Message *MessagePool::New(uint8_t aType, uint16_t aReserved)
     }
 
 exit:
+    if (lock) {
+        openthread_unlock_buffer_mutex();
+    }
     return message;
 }
 
 void MessagePool::Free(Message *aMessage)
 {
+    openthread_lock_buffer_mutex();
     assert(aMessage->Next(MessageInfo::kListAll) == NULL &&
            aMessage->Prev(MessageInfo::kListAll) == NULL);
 
@@ -101,12 +118,16 @@ void MessagePool::Free(Message *aMessage)
            aMessage->Prev(MessageInfo::kListInterface) == NULL);
 
     FreeBuffers(static_cast<Buffer *>(aMessage));
+    openthread_unlock_buffer_mutex();
 }
 
 Buffer *MessagePool::NewBuffer(void)
 {
     Buffer *buffer = NULL;
 
+    /* mutex lock */
+    //openthread_lock_buffer_mutex();
+    
 #if OPENTHREAD_CONFIG_PLATFORM_MESSAGE_MANAGEMENT
 
     buffer = static_cast<Buffer *>(otPlatMessagePoolNew(&GetInstance()));
@@ -136,11 +157,17 @@ Buffer *MessagePool::NewBuffer(void)
 #endif
     }
 
+    /* mutex unlock */
+    //openthread_unlock_buffer_mutex();
+
     return buffer;
 }
 
 void MessagePool::FreeBuffers(Buffer *aBuffer)
 {
+    /* mutex lock */
+    //openthread_lock_buffer_mutex();
+    
     while (aBuffer != NULL)
     {
         Buffer *tmpBuffer = aBuffer->GetNextBuffer();
@@ -153,10 +180,12 @@ void MessagePool::FreeBuffers(Buffer *aBuffer)
 #if ENABLE_DEBUG
         otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MEM, "[OT-MSG] B %u->%u\n", mNumFreeBuffers-1, mNumFreeBuffers);
 #endif
-
 #endif // OPENTHREAD_CONFIG_PLATFORM_MESSAGE_MANAGEMENT
         aBuffer = tmpBuffer;
     }
+
+    /* mutex unlock */
+    //openthread_unlock_buffer_mutex();
 }
 
 otError MessagePool::ReclaimBuffers(int aNumBuffers)
@@ -168,7 +197,6 @@ otError MessagePool::ReclaimBuffers(int aNumBuffers)
     }
 
 exit:
-
     // First comparison is to get around issues with comparing
     // signed and unsigned numbers, if aNumBuffers is negative then
     // the second comparison wont be attempted.
@@ -254,6 +282,7 @@ MessagePool::Iterator MessagePool::GetAllMessagesHead(void) const
 otError Message::ResizeMessage(uint16_t aLength)
 {
     otError error = OT_ERROR_NONE;
+    openthread_lock_buffer_mutex();
 
     // add buffers
     Buffer *curBuffer = this;
@@ -276,10 +305,11 @@ otError Message::ResizeMessage(uint16_t aLength)
     lastBuffer = curBuffer;
     curBuffer = curBuffer->GetNextBuffer();
     lastBuffer->SetNextBuffer(NULL);
-
+    
     GetMessagePool()->FreeBuffers(curBuffer);
 
 exit:
+    openthread_unlock_buffer_mutex();
     return error;
 }
 
@@ -452,6 +482,8 @@ otError Message::Prepend(const void *aBuf, uint16_t aLength)
     otError error = OT_ERROR_NONE;
     Buffer *newBuffer = NULL;
 
+    openthread_lock_buffer_mutex();
+
     while (aLength > GetReserved())
     {
         VerifyOrExit((newBuffer = GetMessagePool()->NewBuffer()) != NULL, error = OT_ERROR_NO_BUFS);
@@ -479,6 +511,7 @@ otError Message::Prepend(const void *aBuf, uint16_t aLength)
     }
 
 exit:
+    openthread_unlock_buffer_mutex();
     return error;
 }
 
@@ -840,6 +873,9 @@ MessageQueue::MessageQueue(void)
 
 void MessageQueue::AddToList(uint8_t aList, Message &aMessage, QueuePosition aPosition)
 {
+    /* mutex lock */
+    //openthread_lock_buffer_mutex();
+
     assert((aMessage.Next(aList) == NULL) && (aMessage.Prev(aList) == NULL));
 
     if (GetTail() == NULL)
@@ -864,10 +900,16 @@ void MessageQueue::AddToList(uint8_t aList, Message &aMessage, QueuePosition aPo
             SetTail(&aMessage);
         }
     }
+
+    /* mutex unlock */
+    //openthread_unlock_buffer_mutex();
 }
 
 void MessageQueue::RemoveFromList(uint8_t aList, Message &aMessage)
 {
+    /* mutex lock */
+    //openthread_lock_buffer_mutex();
+
     assert((aMessage.Next(aList) != NULL) && (aMessage.Prev(aList) != NULL));
 
     if (&aMessage == GetTail())
@@ -885,6 +927,9 @@ void MessageQueue::RemoveFromList(uint8_t aList, Message &aMessage)
 
     aMessage.Prev(aList) = NULL;
     aMessage.Next(aList) = NULL;
+
+    /* mutex unlock */
+    //openthread_unlock_buffer_mutex();
 }
 
 Message *MessageQueue::GetHead(void) const
@@ -1006,6 +1051,9 @@ void PriorityQueue::AddToList(uint8_t aList, Message &aMessage)
     uint8_t priority;
     Message *tail;
     Message *next;
+    
+    /* mutex lock */
+    //openthread_lock_buffer_mutex();
 
     priority = aMessage.GetPriority();
 
@@ -1027,12 +1075,18 @@ void PriorityQueue::AddToList(uint8_t aList, Message &aMessage)
     }
 
     mTails[priority] = &aMessage;
+
+    /* mutex unlock */
+    //openthread_unlock_buffer_mutex();
 }
 
 void PriorityQueue::RemoveFromList(uint8_t aList, Message &aMessage)
 {
     uint8_t priority;
     Message *tail;
+
+    /* mutex lock */
+    //openthread_lock_buffer_mutex();
 
     priority = aMessage.GetPriority();
 
@@ -1054,6 +1108,9 @@ void PriorityQueue::RemoveFromList(uint8_t aList, Message &aMessage)
     aMessage.Prev(aList)->Next(aList) = aMessage.Next(aList);
     aMessage.Next(aList) = NULL;
     aMessage.Prev(aList) = NULL;
+
+    /* mutex unlock */
+    //openthread_unlock_buffer_mutex();
 }
 
 otError PriorityQueue::Enqueue(Message &aMessage)

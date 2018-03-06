@@ -59,6 +59,11 @@
 #define ENABLE_DEBUG (1)
 #endif
 
+extern "C" {
+    void openthread_lock_buffer_mutex(void);
+    void openthread_unlock_buffer_mutex(void);
+}
+
 using ot::Encoding::BigEndian::HostSwap16;
 
 namespace ot {
@@ -3202,10 +3207,15 @@ otError MleRouter::SendChildUpdateRequest(Child &aChild)
     {
         uint8_t childIndex = netif.GetMle().GetChildIndex(aChild);
 
+        openthread_lock_buffer_mutex();
+        bool lock = true;
+
         for (message = netif.GetMeshForwarder().GetSendQueue().GetHead(); message; message = message->GetNext())
         {
             if (message->GetChildMask(childIndex) && message->GetSubType() == Message::kSubTypeMleChildUpdateRequest)
             {
+                lock = false;
+                openthread_unlock_buffer_mutex();
                 // No need to send the resync "Child Update Request" to the sleepy child
                 // if there is one already queued.
                 if (aChild.IsStateRestoring())
@@ -3217,6 +3227,9 @@ otError MleRouter::SendChildUpdateRequest(Child &aChild)
                 netif.GetMeshForwarder().RemoveMessages(aChild, Message::kSubTypeMleChildUpdateRequest);
                 break;
             }
+        }
+        if (lock) {
+            openthread_unlock_buffer_mutex();
         }
     }
 

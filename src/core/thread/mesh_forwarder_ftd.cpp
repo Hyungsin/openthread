@@ -46,6 +46,11 @@
 #define ENABLE_DEBUG (1)
 #endif
 
+extern "C" {
+    void openthread_lock_buffer_mutex(void);
+    void openthread_unlock_buffer_mutex(void);
+}
+
 namespace ot {
 
 otError MeshForwarder::SendMessage(Message &aMessage)
@@ -56,6 +61,8 @@ otError MeshForwarder::SendMessage(Message &aMessage)
 
     uint8_t numChildren;
     Child *child;
+
+    bool lock = false;
 
     switch (aMessage.GetType())
     {
@@ -142,10 +149,18 @@ otError MeshForwarder::SendMessage(Message &aMessage)
 
     aMessage.SetOffset(0);
     aMessage.SetDatagramTag(0);
+
+    openthread_lock_buffer_mutex();
+    lock = true;
     SuccessOrExit(error = mSendQueue.Enqueue(aMessage));
+    lock = false;
+    openthread_unlock_buffer_mutex();
     mScheduleTransmissionTask.Post();
 
 exit:
+    if (lock) {
+        openthread_unlock_buffer_mutex();
+    }
     return error;
 }
 
@@ -154,6 +169,9 @@ void MeshForwarder::HandleResolved(const Ip6::Address &aEid, otError aError)
     Message *cur, *next;
     Ip6::Address ip6Dst;
     bool enqueuedMessage = false;
+
+    openthread_lock_buffer_mutex();
+    bool lock = true;
 
     for (cur = mResolvingQueue.GetHead(); cur; cur = next)
     {
@@ -177,10 +195,18 @@ void MeshForwarder::HandleResolved(const Ip6::Address &aEid, otError aError)
             }
             else
             {
+                lock = false;
+                openthread_unlock_buffer_mutex();
                 LogIp6Message(kMessageDrop, *cur, NULL, aError);
                 cur->Free();
+                openthread_lock_buffer_mutex();
+                lock = true;
             }
         }
+    }
+    
+    if (lock) {
+        openthread_unlock_buffer_mutex();
     }
 
     if (enqueuedMessage)
@@ -192,8 +218,12 @@ void MeshForwarder::HandleResolved(const Ip6::Address &aEid, otError aError)
 void MeshForwarder::ClearChildIndirectMessages(Child &aChild)
 {
     Message *nextMessage;
+    bool lock = false;
 
     VerifyOrExit(aChild.GetIndirectMessageCount() > 0);
+
+    openthread_lock_buffer_mutex();
+    lock = true;
 
     for (Message *message = mSendQueue.GetHead(); message; message = nextMessage)
     {
@@ -209,8 +239,16 @@ void MeshForwarder::ClearChildIndirectMessages(Child &aChild)
             }
 
             mSendQueue.Dequeue(*message);
+            lock = false;
+            openthread_unlock_buffer_mutex();
             message->Free();
+            openthread_lock_buffer_mutex();
+            lock = true;
         }
+    }
+
+    if (lock) {
+        openthread_unlock_buffer_mutex();
     }
 
     aChild.SetIndirectMessage(NULL);
@@ -244,6 +282,9 @@ otError MeshForwarder::EvictIndirectMessage(void)
 {
     otError error = OT_ERROR_NOT_FOUND;
 
+    openthread_lock_buffer_mutex();
+    bool lock = true;
+
     for (Message *message = mSendQueue.GetHead(); message; message = message->GetNext())
     {
         if (!message->IsChildPending())
@@ -251,11 +292,18 @@ otError MeshForwarder::EvictIndirectMessage(void)
             continue;
         }
 
+        lock = false;
+        openthread_unlock_buffer_mutex();
         RemoveMessage(*message);
         ExitNow(error = OT_ERROR_NONE);
+        openthread_lock_buffer_mutex();
+        lock = true;
     }
 
 exit:
+    if (lock) {
+        openthread_unlock_buffer_mutex();
+    }
     return error;
 }
 
@@ -282,6 +330,9 @@ void MeshForwarder::RemoveMessages(Child &aChild, uint8_t aSubType)
 {
     ThreadNetif &netif = GetNetif();
     Message *nextMessage;
+
+    openthread_lock_buffer_mutex();
+    bool lock = true;
 
     for (Message *message = mSendQueue.GetHead(); message; message = nextMessage)
     {
@@ -337,14 +388,25 @@ void MeshForwarder::RemoveMessages(Child &aChild, uint8_t aSubType)
             }
 
             mSendQueue.Dequeue(*message);
+            lock = false;
+            openthread_unlock_buffer_mutex();
             message->Free();
+            openthread_lock_buffer_mutex();
+            lock = true;
         }
+    }
+    
+    if (lock) {
+        openthread_unlock_buffer_mutex();
     }
 }
 
 void MeshForwarder::RemoveDataResponseMessages(void)
 {
     Ip6::Header ip6Header;
+
+    openthread_lock_buffer_mutex();
+    bool lock = true;
 
     for (Message *message = mSendQueue.GetHead(); message; message = message->GetNext())
     {
@@ -375,7 +437,16 @@ void MeshForwarder::RemoveDataResponseMessages(void)
 
         mSendQueue.Dequeue(*message);
         LogIp6Message(kMessageDrop, *message, NULL, OT_ERROR_NONE);
+        
+        lock = false;
+        openthread_unlock_buffer_mutex();
         message->Free();
+        openthread_lock_buffer_mutex();
+        lock = true;
+    }
+    
+    if (lock) {
+        openthread_unlock_buffer_mutex();
     }
 }
 
@@ -459,6 +530,9 @@ Message *MeshForwarder::GetIndirectTransmission(Child &aChild)
     Message *next;
     uint8_t childIndex = GetNetif().GetMle().GetChildIndex(aChild);
 
+    openthread_lock_buffer_mutex();
+    bool lock = true;
+
     for (message = mSendQueue.GetHead(); message; message = next)
     {
         next = message->GetNext();
@@ -472,12 +546,20 @@ Message *MeshForwarder::GetIndirectTransmission(Child &aChild)
                 message->ClearChildMask(childIndex);
                 mSourceMatchController.DecrementMessageCount(aChild);
                 mSendQueue.Dequeue(*message);
+                lock = false;
+                openthread_unlock_buffer_mutex();
                 message->Free();
+                openthread_lock_buffer_mutex();
+                lock = true;
                 continue;
             }
 
             break;
         }
+    }
+
+    if (lock) {
+        openthread_unlock_buffer_mutex();
     }
 
     aChild.SetIndirectMessage(message);

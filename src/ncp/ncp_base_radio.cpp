@@ -49,6 +49,11 @@
 #include "net/ip6.hpp"
 
 #if OPENTHREAD_ENABLE_RAW_LINK_API
+extern "C" {
+    void openthread_lock_uart_buffer_mutex(void);
+    void openthread_unlock_uart_buffer_mutex(void);
+}
+
 namespace ot {
 namespace Ncp {
 
@@ -70,6 +75,8 @@ void NcpBase::LinkRawReceiveDone(otRadioFrame *aFrame, otError aError)
     {
         flags |= SPINEL_MD_FLAG_TX;
     }
+
+    openthread_lock_uart_buffer_mutex();
 
     // Append frame header and frame length
     SuccessOrExit(mEncoder.BeginFrame(header, SPINEL_CMD_PROP_VALUE_IS, SPINEL_PROP_STREAM_RAW));
@@ -100,6 +107,7 @@ void NcpBase::LinkRawReceiveDone(otRadioFrame *aFrame, otError aError)
     SuccessOrExit(mEncoder.EndFrame());
 
 exit:
+    openthread_unlock_uart_buffer_mutex();
     return;
 }
 
@@ -111,6 +119,8 @@ void NcpBase::LinkRawTransmitDone(otInstance *, otRadioFrame *aFrame,
 
 void NcpBase::LinkRawTransmitDone(otRadioFrame *aFrame, otRadioFrame *aAckFrame, otError aError)
 {
+    bool lock = false;
+
     if (mCurTransmitTID)
     {
         uint8_t header = SPINEL_HEADER_FLAG | SPINEL_HEADER_IID_0 | mCurTransmitTID;
@@ -118,6 +128,9 @@ void NcpBase::LinkRawTransmitDone(otRadioFrame *aFrame, otRadioFrame *aAckFrame,
 
         // Clear cached transmit TID
         mCurTransmitTID = 0;
+
+        openthread_lock_uart_buffer_mutex();
+        lock = true;
 
         SuccessOrExit(mEncoder.BeginFrame(header, SPINEL_CMD_PROP_VALUE_IS, SPINEL_PROP_LAST_STATUS));
         SuccessOrExit(mEncoder.WriteUintPacked(ThreadErrorToSpinelStatus(aError)));
@@ -144,6 +157,9 @@ void NcpBase::LinkRawTransmitDone(otRadioFrame *aFrame, otRadioFrame *aAckFrame,
     }
 
 exit:
+    if (lock) {
+        openthread_unlock_uart_buffer_mutex();
+    }
     OT_UNUSED_VARIABLE(aFrame);
     return;
 }
@@ -156,6 +172,7 @@ void NcpBase::LinkRawEnergyScanDone(otInstance *, int8_t aEnergyScanMaxRssi)
 void NcpBase::LinkRawEnergyScanDone(int8_t aEnergyScanMaxRssi)
 {
     int8_t scanChannel = mCurScanChannel;
+    bool lock = false;
 
     // Clear current scan channel
     mCurScanChannel = kInvalidScanChannel;
@@ -164,6 +181,8 @@ void NcpBase::LinkRawEnergyScanDone(int8_t aEnergyScanMaxRssi)
     // since the energy scan could have been on a different channel.
     otLinkRawReceive(mInstance, mCurReceiveChannel, &NcpBase::LinkRawReceiveDone);
 
+    openthread_lock_uart_buffer_mutex();
+    lock = true;
     SuccessOrExit(
         mEncoder.BeginFrame(
             SPINEL_HEADER_FLAG | SPINEL_HEADER_IID_0,
@@ -174,7 +193,11 @@ void NcpBase::LinkRawEnergyScanDone(int8_t aEnergyScanMaxRssi)
     SuccessOrExit(mEncoder.WriteUint8(static_cast<uint8_t>(scanChannel)));
     SuccessOrExit(mEncoder.WriteInt8(aEnergyScanMaxRssi));
     SuccessOrExit(mEncoder.EndFrame());
+    lock = false;
+    openthread_unlock_uart_buffer_mutex();
 
+    openthread_lock_uart_buffer_mutex();
+    lock = true;
     // We are finished with the scan, so send out
     // a property update indicating such.
     SuccessOrExit(
@@ -188,6 +211,9 @@ void NcpBase::LinkRawEnergyScanDone(int8_t aEnergyScanMaxRssi)
     SuccessOrExit(mEncoder.EndFrame());
 
 exit:
+    if (lock) {
+        openthread_unlock_uart_buffer_mutex();
+    }
     return;
 }
 

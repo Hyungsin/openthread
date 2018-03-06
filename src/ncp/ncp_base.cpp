@@ -50,6 +50,11 @@
 #include "mac/mac_frame.hpp"
 #include "net/ip6.hpp"
 
+extern "C" {
+    void openthread_lock_uart_buffer_mutex(void);
+    void openthread_unlock_uart_buffer_mutex(void);
+}
+
 namespace ot {
 namespace Ncp {
 
@@ -773,6 +778,7 @@ otError NcpBase::StreamWrite(int aStreamId, const uint8_t *aDataPtr, int aDataLe
     otError error = OT_ERROR_NONE;
     uint8_t header = SPINEL_HEADER_FLAG | SPINEL_HEADER_IID_0;
     spinel_prop_key_t streamPropKey;
+    bool lock = false;
 
     if (aStreamId == 0)
     {
@@ -792,11 +798,16 @@ otError NcpBase::StreamWrite(int aStreamId, const uint8_t *aDataPtr, int aDataLe
 
     VerifyOrExit(IsResponseQueueEmpty(), error = OT_ERROR_NO_BUFS);
 
+    openthread_lock_uart_buffer_mutex();
+    lock = true;
     SuccessOrExit(error = mEncoder.BeginFrame(header, SPINEL_CMD_PROP_VALUE_IS, streamPropKey));
     SuccessOrExit(error = mEncoder.WriteData(aDataPtr, static_cast<uint16_t>(aDataLen)));
     SuccessOrExit(error = mEncoder.EndFrame());
 
 exit:
+    if (lock) {
+        openthread_unlock_uart_buffer_mutex();
+    }
 
     if (error == OT_ERROR_NO_BUFS)
     {
@@ -831,6 +842,7 @@ void NcpBase::HandleRawFrame(const otRadioFrame *aFrame)
 {
     uint16_t flags = 0;
     uint8_t header = SPINEL_HEADER_FLAG | SPINEL_HEADER_IID_0;
+    bool lock = false;
 
     if (!mIsRawStreamEnabled)
     {
@@ -842,6 +854,8 @@ void NcpBase::HandleRawFrame(const otRadioFrame *aFrame)
         flags |= SPINEL_MD_FLAG_TX;
     }
 
+    openthread_lock_uart_buffer_mutex();
+    lock = true;
     // Append frame header and frame length
     SuccessOrExit(mEncoder.BeginFrame(header, SPINEL_CMD_PROP_VALUE_IS, SPINEL_PROP_STREAM_RAW));
     SuccessOrExit(mEncoder.WriteUint16(aFrame->mLength));
@@ -865,6 +879,9 @@ void NcpBase::HandleRawFrame(const otRadioFrame *aFrame)
     SuccessOrExit(mEncoder.EndFrame());
 
 exit:
+    if (lock) {
+        openthread_unlock_uart_buffer_mutex();
+    }
     return;
 }
 
@@ -1326,11 +1343,13 @@ otError NcpBase::WriteLastStatusFrame(uint8_t aHeader, spinel_status_t aLastStat
         mLastStatus = aLastStatus;
     }
 
+    openthread_lock_uart_buffer_mutex();
     SuccessOrExit(error = mEncoder.BeginFrame(aHeader, SPINEL_CMD_PROP_VALUE_IS, SPINEL_PROP_LAST_STATUS));
     SuccessOrExit(error = mEncoder.WriteUintPacked(aLastStatus));
     SuccessOrExit(error = mEncoder.EndFrame());
 
 exit:
+    openthread_unlock_uart_buffer_mutex();
     return error;
 }
 
@@ -1338,9 +1357,12 @@ otError NcpBase::WritePropertyValueIsFrame(uint8_t aHeader, spinel_prop_key_t aP
 {
     otError error = OT_ERROR_NONE;
     PropertyHandler handler = FindGetPropertyHandler(aPropKey);
+    bool lock = false;
 
     if (handler != NULL)
     {
+        openthread_lock_uart_buffer_mutex();
+        lock = true;
         SuccessOrExit(error = mEncoder.BeginFrame(aHeader, SPINEL_CMD_PROP_VALUE_IS, aPropKey));
         SuccessOrExit(error = (this->*handler)());
         ExitNow(error = mEncoder.EndFrame());
@@ -1359,6 +1381,9 @@ otError NcpBase::WritePropertyValueIsFrame(uint8_t aHeader, spinel_prop_key_t aP
     }
 
 exit:
+    if (lock) {
+        openthread_unlock_uart_buffer_mutex();
+    }
     return error;
 }
 
@@ -1368,11 +1393,13 @@ otError NcpBase::WritePropertyValueInsertedRemovedFrame(uint8_t aHeader, unsigne
 {
     otError error = OT_ERROR_NONE;
 
+    openthread_lock_uart_buffer_mutex();
     SuccessOrExit(error = mEncoder.BeginFrame(aHeader, aResponseCommand, aPropKey));
     SuccessOrExit(error = mEncoder.WriteData(aValuePtr, aValueLen));
     SuccessOrExit(error = mEncoder.EndFrame());
 
 exit:
+    openthread_unlock_uart_buffer_mutex();
     return error;
 }
 
@@ -1455,6 +1482,7 @@ otError NcpBase::CommandHandler_PEEK(uint8_t aHeader)
     otError responseError = OT_ERROR_NONE;
     uint32_t address;
     uint16_t count;
+    bool lock = false;
 
     SuccessOrExit(parseError = mDecoder.ReadUint32(address));
     SuccessOrExit(parseError = mDecoder.ReadUint16(count));
@@ -1466,6 +1494,8 @@ otError NcpBase::CommandHandler_PEEK(uint8_t aHeader)
         VerifyOrExit(mAllowPeekDelegate(address, count), parseError = OT_ERROR_INVALID_ARGS);
     }
 
+    openthread_lock_uart_buffer_mutex();
+    lock = true;
     SuccessOrExit(responseError = mEncoder.BeginFrame(aHeader, SPINEL_CMD_PEEK_RET));
     SuccessOrExit(responseError = mEncoder.WriteUint32(address));
     SuccessOrExit(responseError = mEncoder.WriteUint16(count));
@@ -1473,6 +1503,9 @@ otError NcpBase::CommandHandler_PEEK(uint8_t aHeader)
     SuccessOrExit(responseError = mEncoder.EndFrame());
 
 exit:
+    if (lock) {
+        openthread_unlock_uart_buffer_mutex();
+    }
     if (parseError != OT_ERROR_NONE)
     {
         responseError = PrepareLastStatusResponse(aHeader, ThreadErrorToSpinelStatus(parseError));

@@ -54,6 +54,11 @@
 #define ENABLE_DEBUG (1)
 #endif
 
+extern "C" {
+    void openthread_lock_buffer_mutex(void);
+    void openthread_unlock_buffer_mutex(void);
+}
+
 namespace ot {
 
 DataPollManager::DataPollManager(Instance &aInstance):
@@ -105,6 +110,7 @@ otError DataPollManager::SendDataPoll(void)
     otError error;
     Message *message;
     Neighbor *parent;
+    bool lock = false;
 
     VerifyOrExit(mEnabled, error = OT_ERROR_INVALID_STATE);
     VerifyOrExit(!netif.GetMac().GetRxOnWhenIdle(), error = OT_ERROR_INVALID_STATE);
@@ -114,10 +120,16 @@ otError DataPollManager::SendDataPoll(void)
 
     mTimer.Stop();
 
+    openthread_lock_buffer_mutex();
+    lock = true;
+
     for (message = netif.GetMeshForwarder().GetSendQueue().GetHead(); message; message = message->GetNext())
     {
         VerifyOrExit(message->GetType() != Message::kTypeMacDataPoll, error = OT_ERROR_ALREADY);
     }
+
+    lock = false;
+    openthread_unlock_buffer_mutex();
 
     message = GetInstance().GetMessagePool().New(Message::kTypeMacDataPoll, 0);
     VerifyOrExit(message != NULL, error = OT_ERROR_NO_BUFS);
@@ -132,6 +144,9 @@ otError DataPollManager::SendDataPoll(void)
     }
 
 exit:
+    if (lock) {
+        openthread_unlock_buffer_mutex();
+    }
 
     switch (error)
     {

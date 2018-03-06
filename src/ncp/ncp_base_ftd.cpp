@@ -54,6 +54,10 @@
 #include "net/ip6.hpp"
 
 #if OPENTHREAD_FTD
+extern "C" {
+    void openthread_lock_uart_buffer_mutex(void);
+    void openthread_unlock_uart_buffer_mutex(void);
+}
 namespace ot {
 namespace Ncp {
 
@@ -97,6 +101,7 @@ void NcpBase::HandleChildTableChanged(otThreadChildTableEvent aEvent, const otCh
     otError error = OT_ERROR_NONE;
     uint8_t header = SPINEL_HEADER_FLAG | SPINEL_HEADER_IID_0;
     unsigned int command = 0;
+    bool lock = false;
 
     VerifyOrExit(!mChangedPropsSet.IsPropertyFiltered(SPINEL_PROP_THREAD_CHILD_TABLE));
 
@@ -116,12 +121,16 @@ void NcpBase::HandleChildTableChanged(otThreadChildTableEvent aEvent, const otCh
         ExitNow();
     }
 
+    openthread_lock_uart_buffer_mutex();
+    lock = true;
     SuccessOrExit(error = mEncoder.BeginFrame(header, command, SPINEL_PROP_THREAD_CHILD_TABLE));
     SuccessOrExit(error = EncodeChildInfo(aChildInfo));
     SuccessOrExit(error = mEncoder.EndFrame());
 
 exit:
-
+    if (lock) {
+        openthread_unlock_uart_buffer_mutex();
+    }
     // If the frame can not be added (out of NCP buffer space), we remember
     // to send an async `LAST_STATUS(NOMEM)` when buffer space becomes
     // available. Also `mShouldEmitChildTableUpdate` flag is set to `true` so
@@ -598,6 +607,7 @@ void NcpBase::HandleTmfProxyStream(otMessage *aMessage, uint16_t aLocator, uint1
     uint16_t length = otMessageGetLength(aMessage);
     uint8_t header =  SPINEL_HEADER_FLAG | SPINEL_HEADER_IID_0;
 
+    openthread_lock_uart_buffer_mutex();
     SuccessOrExit(error = mEncoder.BeginFrame(
                               header,
                               SPINEL_CMD_PROP_VALUE_IS,
@@ -617,6 +627,7 @@ void NcpBase::HandleTmfProxyStream(otMessage *aMessage, uint16_t aLocator, uint1
     aMessage = NULL;
 
 exit:
+    openthread_unlock_uart_buffer_mutex();
 
     if (aMessage != NULL)
     {

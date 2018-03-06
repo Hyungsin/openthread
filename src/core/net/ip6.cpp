@@ -54,6 +54,11 @@
 #define ENABLE_DEBUG (1)
 #endif
 
+extern "C" {
+    void openthread_lock_buffer_mutex(void);
+    void openthread_unlock_buffer_mutex(void);
+}
+
 namespace ot {
 namespace Ip6 {
 
@@ -351,7 +356,9 @@ exit:
 
 void Ip6::EnqueueDatagram(Message &aMessage)
 {
+    openthread_lock_buffer_mutex();
     mSendQueue.Enqueue(aMessage);
+    openthread_unlock_buffer_mutex();
     mSendQueueTask.Post();
 }
 
@@ -459,10 +466,19 @@ void Ip6::HandleSendQueue(void)
 {
     Message *message;
 
+    openthread_lock_buffer_mutex();
+    bool lock = true;
     while ((message = mSendQueue.GetHead()) != NULL)
     {
         mSendQueue.Dequeue(*message);
+        lock = false;
+        openthread_unlock_buffer_mutex();
         HandleDatagram(*message, NULL, message->GetInterfaceId(), NULL, false);
+        openthread_lock_buffer_mutex();
+        lock = true;
+    }
+    if (lock) {
+        openthread_unlock_buffer_mutex();
     }
 }
 

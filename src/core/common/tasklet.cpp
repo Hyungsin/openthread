@@ -40,6 +40,11 @@
 #include "common/instance.hpp"
 #include "net/ip6.hpp"
 
+extern "C" {
+    void openthread_lock_tasklet_mutex(void);
+    void openthread_unlock_tasklet_mutex(void);
+}
+
 namespace ot {
 
 Tasklet::Tasklet(Instance &aInstance, Handler aHandler, void *aOwner):
@@ -64,7 +69,11 @@ TaskletScheduler::TaskletScheduler(void):
 otError TaskletScheduler::Post(Tasklet &aTasklet)
 {
     otError error = OT_ERROR_NONE;
+    bool lock = false;
 
+    openthread_lock_tasklet_mutex();
+    lock = true;
+ 
     VerifyOrExit(mTail != &aTasklet && aTasklet.mNext == NULL, error = OT_ERROR_ALREADY);
 
     VerifyOrExit(&aTasklet.GetInstance().Get<TaskletScheduler>() == this);
@@ -73,6 +82,10 @@ otError TaskletScheduler::Post(Tasklet &aTasklet)
     {
         mHead = &aTasklet;
         mTail = &aTasklet;
+        
+        lock = false;
+        openthread_unlock_tasklet_mutex();
+
         otTaskletsSignalPending(&aTasklet.GetInstance());
     }
     else
@@ -82,11 +95,15 @@ otError TaskletScheduler::Post(Tasklet &aTasklet)
     }
 
 exit:
+    if (lock) {
+        openthread_unlock_tasklet_mutex();
+    }
     return error;
 }
 
 Tasklet *TaskletScheduler::PopTasklet(void)
 {
+    openthread_lock_tasklet_mutex();
     Tasklet *task = mHead;
 
     if (task != NULL)
@@ -100,7 +117,7 @@ Tasklet *TaskletScheduler::PopTasklet(void)
 
         task->mNext = NULL;
     }
-
+    openthread_unlock_tasklet_mutex();
     return task;
 }
 

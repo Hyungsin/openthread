@@ -36,6 +36,12 @@
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 
+extern "C" {
+    void print_active_pid(void);
+    void openthread_lock_buffer_mutex(void);
+    void openthread_unlock_buffer_mutex(void);
+}
+
 namespace ot {
 namespace Ncp {
 
@@ -61,6 +67,10 @@ void NcpFrameBuffer::Clear(void)
 {
     otMessage *message;
 
+    bool lock = false;
+    //printf("b-clear: ");
+    //print_active_pid();
+
     // Write (InFrame) related variables
     mWriteFrameStart[kPriorityLow] = mBuffer;
     mWriteFrameStart[kPriorityHigh] = GetUpdatedBufPtr(mBuffer, 1, kBackward);
@@ -85,7 +95,8 @@ void NcpFrameBuffer::Clear(void)
     mReadMessageTail = mMessageBuffer;
 
     // Free all messages in the queues.
-
+    openthread_lock_buffer_mutex();
+    lock = true;
     while ((message = otMessageQueueGetHead(&mWriteFrameMessageQueue)) != NULL)
     {
         otMessageQueueDequeue(&mWriteFrameMessageQueue, message);
@@ -100,8 +111,16 @@ void NcpFrameBuffer::Clear(void)
         while ((message = otMessageQueueGetHead(&mMessageQueue[priority])) != NULL)
         {
             otMessageQueueDequeue(&mMessageQueue[priority], message);
+            lock = false;
+            openthread_unlock_buffer_mutex();
             otMessageFree(message);
+            openthread_lock_buffer_mutex();
+            lock = true;
         }
+    }
+    
+    if (lock) {
+        openthread_unlock_buffer_mutex();
     }
 }
 
@@ -220,6 +239,9 @@ otError NcpFrameBuffer::InFrameAppend(uint8_t aByte)
     otError error = OT_ERROR_NONE;
     uint8_t *newTail;
 
+    /*printf("b-assert: ");
+    print_active_pid();
+    printf("(%u %u)\n", mWriteDirection, kUnknown);*/
     assert(mWriteDirection != kUnknown);
 
     newTail = GetUpdatedBufPtr(mWriteSegmentTail, 1, mWriteDirection);
@@ -301,11 +323,15 @@ void NcpFrameBuffer::InFrameDiscard(void)
 {
     otMessage *message;
 
+    //printf("b-discard: ");
+    //print_active_pid();
+
     VerifyOrExit(mWriteDirection != kUnknown);
 
     // Move the write segment head and tail pointers back to frame start.
     mWriteSegmentHead = mWriteSegmentTail = mWriteFrameStart[mWriteDirection];
 
+    openthread_lock_buffer_mutex();
     while ((message = otMessageQueueGetHead(&mWriteFrameMessageQueue)) != NULL)
     {
         otMessageQueueDequeue(&mWriteFrameMessageQueue, message);
@@ -314,6 +340,7 @@ void NcpFrameBuffer::InFrameDiscard(void)
         // being discarded, are not yet owned by the `NcpFrameBuffer` and
         // therefore should not be freed.
     }
+    openthread_unlock_buffer_mutex();
 
     mWriteDirection = kUnknown;
 
@@ -386,6 +413,7 @@ exit:
 otError NcpFrameBuffer::InFrameFeedMessage(otMessage *aMessage)
 {
     otError error = OT_ERROR_NONE;
+    bool lock = false;
 
     VerifyOrExit(aMessage != NULL, error = OT_ERROR_INVALID_ARGS);
     VerifyOrExit(mWriteDirection != kUnknown, error = OT_ERROR_INVALID_STATE);
@@ -393,13 +421,20 @@ otError NcpFrameBuffer::InFrameFeedMessage(otMessage *aMessage)
     // Begin a new segment (if we are not in middle of segment already).
     SuccessOrExit(error = InFrameBeginSegment());
 
+    openthread_lock_buffer_mutex();
+    lock = true;
     // Enqueue the message in the current write frame queue.
     SuccessOrExit(error = otMessageQueueEnqueue(&mWriteFrameMessageQueue, aMessage));
+    lock = false;
+    openthread_unlock_buffer_mutex();
 
     // End/Close the current segment marking the flag that it contains an associated message.
     InFrameEndSegment(kSegmentHeaderMessageIndicatorFlag);
 
 exit:
+    if (lock) {
+        openthread_unlock_buffer_mutex();
+    }
     return error;
 }
 
@@ -505,17 +540,22 @@ otError NcpFrameBuffer::InFrameEnd(void)
     // Update the frame start pointer to current segment head to be ready for next frame.
     mWriteFrameStart[mWriteDirection] = mWriteSegmentHead;
 
+    openthread_lock_buffer_mutex();
     // Move all the messages from the frame queue to the main queue.
     while ((message = otMessageQueueGetHead(&mWriteFrameMessageQueue)) != NULL)
     {
         otMessageQueueDequeue(&mWriteFrameMessageQueue, message);
         otMessageQueueEnqueue(&mMessageQueue[mWriteDirection], message);
     }
+    openthread_unlock_buffer_mutex();
 
     if (mFrameAddedCallback != NULL)
     {
         mFrameAddedCallback(mFrameAddedContext, mWriteFrameTag, static_cast<Priority>(mWriteDirection), this);
     }
+
+    //printf("b-fend: ");
+    //print_active_pid();
 
     mWriteDirection = kUnknown;
 
@@ -618,10 +658,12 @@ otError NcpFrameBuffer::OutFramePrepareMessage(void)
     // Ensure that the segment header indicates that there is an associated message or return `NotFound` error.
     VerifyOrExit((header & kSegmentHeaderMessageIndicatorFlag) != 0, error = OT_ERROR_NOT_FOUND);
 
+    openthread_lock_buffer_mutex();
     // Update the current message from the queue.
     mReadMessage = (mReadMessage == NULL) ?
                    otMessageQueueGetHead(&mMessageQueue[mReadDirection]) :
                    otMessageQueueGetNext(&mMessageQueue[mReadDirection], mReadMessage);
+    openthread_unlock_buffer_mutex();
 
     VerifyOrExit(mReadMessage != NULL, error = OT_ERROR_NOT_FOUND);
 
@@ -805,10 +847,17 @@ otError NcpFrameBuffer::OutFrameRemove(void)
         // If current segment has an appended message, remove it from message queue and free it.
         if (header & kSegmentHeaderMessageIndicatorFlag)
         {
+            openthread_lock_buffer_mutex();
+            bool lock = true;
             if ((message = otMessageQueueGetHead(&mMessageQueue[mReadDirection])) != NULL)
             {
                 otMessageQueueDequeue(&mMessageQueue[mReadDirection], message);
+                lock = false;
+                openthread_unlock_buffer_mutex();
                 otMessageFree(message);
+            }
+            if (lock) {
+                openthread_unlock_buffer_mutex();
             }
         }
 
@@ -899,9 +948,11 @@ uint16_t NcpFrameBuffer::OutFrameGetLength(void)
         // If current segment has an associated message, add its length to frame length.
         if (header & kSegmentHeaderMessageIndicatorFlag)
         {
+            openthread_lock_buffer_mutex();
             message = (message == NULL) ?
                       otMessageQueueGetHead(&mMessageQueue[mReadDirection]) :
                       otMessageQueueGetNext(&mMessageQueue[mReadDirection], message);
+            openthread_unlock_buffer_mutex();
 
             if (message != NULL)
             {

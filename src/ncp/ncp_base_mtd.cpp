@@ -58,6 +58,13 @@
 
 #if OPENTHREAD_MTD || OPENTHREAD_FTD
 
+extern "C" {
+    void openthread_lock_uart_buffer_mutex(void);
+    void openthread_unlock_uart_buffer_mutex(void);
+    void openthread_lock_buffer_mutex(void);
+    void openthread_unlock_buffer_mutex(void);
+}
+
 namespace ot {
 namespace Ncp {
 
@@ -2235,6 +2242,7 @@ otError NcpBase::SetPropertyHandler_NEST_STREAM_MFG(uint8_t aHeader)
     const char *string = NULL;
     const char *output = NULL;
     otError error = OT_ERROR_NONE;
+    bool lock = false;
 
     error = mDecoder.ReadUtf8(string);
 
@@ -2242,12 +2250,17 @@ otError NcpBase::SetPropertyHandler_NEST_STREAM_MFG(uint8_t aHeader)
 
     output = otDiagProcessCmdLine(string);
 
+    openthread_lock_uart_buffer_mutex();
+    lock = true;
     // Prepare the response
     SuccessOrExit(error = mEncoder.BeginFrame(aHeader, SPINEL_CMD_PROP_VALUE_IS, SPINEL_PROP_NEST_STREAM_MFG));
     SuccessOrExit(error = mEncoder.WriteUtf8(output));
     SuccessOrExit(error = mEncoder.EndFrame());
 
 exit:
+    if (lock) {
+        openthread_unlock_uart_buffer_mutex();
+    }
     return error;
 }
 
@@ -2706,6 +2719,7 @@ void NcpBase::HandleActiveScanResult_Jump(otActiveScanResult *aResult, void *aCo
 void NcpBase::HandleActiveScanResult(otActiveScanResult *aResult)
 {
     otError error = OT_ERROR_NONE;
+    bool lock = false;
 
     if (aResult)
     {
@@ -2721,6 +2735,8 @@ void NcpBase::HandleActiveScanResult(otActiveScanResult *aResult)
             flags |= SPINEL_BEACON_THREAD_FLAG_NATIVE;
         }
 
+        openthread_lock_uart_buffer_mutex();
+        lock = true;
         SuccessOrExit(error = mEncoder.BeginFrame(
                                   SPINEL_HEADER_FLAG | SPINEL_HEADER_IID_0,
                                   SPINEL_CMD_PROP_VALUE_INSERTED,
@@ -2755,7 +2771,9 @@ void NcpBase::HandleActiveScanResult(otActiveScanResult *aResult)
     }
 
 exit:
-
+    if (lock) {
+        openthread_unlock_uart_buffer_mutex();
+    }
     if (error != OT_ERROR_NONE)
     {
         // We ran out of buffer adding a scan result so remember to send
@@ -2774,9 +2792,12 @@ void NcpBase::HandleEnergyScanResult_Jump(otEnergyScanResult *aResult, void *aCo
 void NcpBase::HandleEnergyScanResult(otEnergyScanResult *aResult)
 {
     otError error = OT_ERROR_NONE;
+    bool lock = false;
 
     if (aResult)
     {
+        openthread_lock_uart_buffer_mutex();
+        lock = true;
         SuccessOrExit(error = mEncoder.BeginFrame(
                                   SPINEL_HEADER_FLAG | SPINEL_HEADER_IID_0,
                                   SPINEL_CMD_PROP_VALUE_INSERTED,
@@ -2795,6 +2816,9 @@ void NcpBase::HandleEnergyScanResult(otEnergyScanResult *aResult)
     }
 
 exit:
+    if (lock) {
+        openthread_unlock_uart_buffer_mutex();
+    }
 
     if (error != OT_ERROR_NONE)
     {
@@ -2814,9 +2838,14 @@ void NcpBase::HandleDatagramFromStack(otMessage *aMessage, void *aContext)
 
 void NcpBase::HandleDatagramFromStack(otMessage *aMessage)
 {
+    bool lock = false;
     VerifyOrExit(aMessage != NULL);
 
+    openthread_lock_buffer_mutex();
+    lock = true;
     SuccessOrExit(otMessageQueueEnqueue(&mMessageQueue, aMessage));
+    lock = false;
+    openthread_unlock_buffer_mutex();
 
     // If there is no queued spinel command response, try to write/send
     // the datagram message immediately. If there is a queued response
@@ -2831,6 +2860,9 @@ void NcpBase::HandleDatagramFromStack(otMessage *aMessage)
     }
 
 exit:
+    if (lock) {
+        openthread_unlock_buffer_mutex();
+    }
     return;
 }
 
@@ -2841,6 +2873,7 @@ otError NcpBase::SendDatagramMessage(otMessage *aMessage)
     bool isSecure = otMessageIsLinkSecurityEnabled(aMessage);
     spinel_prop_key_t propKey = isSecure ? SPINEL_PROP_STREAM_NET : SPINEL_PROP_STREAM_NET_INSECURE;
 
+    openthread_lock_uart_buffer_mutex();
     SuccessOrExit(error = mEncoder.BeginFrame(header, SPINEL_CMD_PROP_VALUE_IS, propKey));
     SuccessOrExit(error = mEncoder.WriteUint16(otMessageGetLength(aMessage)));
     SuccessOrExit(error = mEncoder.WriteMessage(aMessage));
@@ -2859,6 +2892,7 @@ otError NcpBase::SendDatagramMessage(otMessage *aMessage)
     }
 
 exit:
+    openthread_unlock_uart_buffer_mutex();
     return error;
 }
 
@@ -2866,6 +2900,9 @@ otError NcpBase::SendQueuedDatagramMessages(void)
 {
     otError error = OT_ERROR_NONE;
     otMessage *message;
+
+    openthread_lock_buffer_mutex();
+    bool lock = true;
 
     while ((message = otMessageQueueGetHead(&mMessageQueue)) != NULL)
     {
@@ -2877,7 +2914,11 @@ otError NcpBase::SendQueuedDatagramMessages(void)
 
         otMessageQueueDequeue(&mMessageQueue, message);
 
+        lock = false;        
+        openthread_unlock_buffer_mutex();
         error = SendDatagramMessage(message);
+        openthread_lock_buffer_mutex();
+        lock = true;
 
         if (error != OT_ERROR_NONE)
         {
@@ -2888,6 +2929,9 @@ otError NcpBase::SendQueuedDatagramMessages(void)
     }
 
 exit:
+    if (lock) {
+        openthread_unlock_buffer_mutex();
+    }
     return error;
 }
 

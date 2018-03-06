@@ -59,6 +59,11 @@
 #define ENABLE_DEBUG (1)
 #endif
 
+extern "C" {
+    void openthread_lock_buffer_mutex(void);
+    void openthread_unlock_buffer_mutex(void);
+}
+
 using ot::Encoding::BigEndian::HostSwap16;
 
 namespace ot {
@@ -120,6 +125,7 @@ otError MeshForwarder::Stop(void)
     ThreadNetif &netif = GetNetif();
     otError error = OT_ERROR_NONE;
     Message *message;
+    bool lock = false;
 
     VerifyOrExit(mEnabled == true);
 
@@ -133,10 +139,19 @@ otError MeshForwarder::Stop(void)
         netif.GetMle().HandleDiscoverComplete();
     }
 
+    openthread_lock_buffer_mutex();
+    lock = true;
     while ((message = mSendQueue.GetHead()) != NULL)
     {
         mSendQueue.Dequeue(*message);
+        lock = false;
+        openthread_unlock_buffer_mutex();
         message->Free();
+        openthread_lock_buffer_mutex();
+        lock = true;
+    }
+    if (lock) {
+        openthread_unlock_buffer_mutex();
     }
 
     while ((message = mReassemblyList.GetHead()) != NULL)
@@ -170,7 +185,9 @@ void MeshForwarder::RemoveMessage(Message &aMessage)
         mSendMessage = NULL;
     }
 
+    openthread_lock_buffer_mutex();
     mSendQueue.Dequeue(aMessage);
+    openthread_unlock_buffer_mutex();
     LogIp6Message(kMessageEvict, aMessage, NULL, OT_ERROR_NO_BUFS);
     aMessage.Free();
 }
@@ -242,6 +259,9 @@ Message *MeshForwarder::GetDirectTransmission(void)
     Message *curMessage, *nextMessage;
     otError error = OT_ERROR_NONE;
 
+    openthread_lock_buffer_mutex();
+    bool lock = true;
+
     for (curMessage = mSendQueue.GetHead(); curMessage; curMessage = nextMessage)
     {
         nextMessage = curMessage->GetNext();
@@ -257,7 +277,11 @@ Message *MeshForwarder::GetDirectTransmission(void)
 #if ENABLE_DEBUG
             otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_IP6, "[OT-MF]: Tx IPv6 msg ");
 #endif
+            lock = false;
+            openthread_unlock_buffer_mutex();
             error = UpdateIp6Route(*curMessage);
+            openthread_lock_buffer_mutex();
+            lock = true;
 
             if (curMessage->GetSubType() == Message::kSubTypeMleDiscoverRequest)
             {
@@ -276,7 +300,11 @@ Message *MeshForwarder::GetDirectTransmission(void)
 #if ENABLE_DEBUG
             otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_IP6, "[OT-MF]: Tx 6LoWPAN msg\n");
 #endif
+            lock = false;
+            openthread_unlock_buffer_mutex();
             error = UpdateMeshRoute(*curMessage);
+            openthread_lock_buffer_mutex();
+            lock = true;
             break;
 
 #endif
@@ -304,7 +332,11 @@ Message *MeshForwarder::GetDirectTransmission(void)
         case OT_ERROR_NO_BUFS:
             mSendQueue.Dequeue(*curMessage);
             LogIp6Message(kMessageDrop, *curMessage, NULL, error);
+            lock = false;
+            openthread_unlock_buffer_mutex();
             curMessage->Free();
+            openthread_lock_buffer_mutex();
+            lock = true;
             continue;
 
         default:
@@ -314,6 +346,9 @@ Message *MeshForwarder::GetDirectTransmission(void)
     }
 
 exit:
+    if (lock) {
+        openthread_unlock_buffer_mutex();
+    }
     return curMessage;
 }
 
@@ -1089,7 +1124,9 @@ void MeshForwarder::HandleSentFrame(Mac::Frame &aFrame, otError aError)
 
     if (mSendMessage->GetDirectTransmission() == false && mSendMessage->IsChildPending() == false)
     {
+        openthread_lock_buffer_mutex();
         mSendQueue.Dequeue(*mSendMessage);
+        openthread_unlock_buffer_mutex();
 /*#if ENABLE_DEBUG
         printf("[OT-MF] Tx End\n");
 #endif*/
@@ -1127,7 +1164,10 @@ void MeshForwarder::HandleDiscoverTimer(void)
 
         if (mScanChannel > OT_RADIO_CHANNEL_MAX)
         {
+            openthread_lock_buffer_mutex();
             mSendQueue.Dequeue(*mSendMessage);
+            openthread_unlock_buffer_mutex();
+
             mSendMessage->Free();
             mSendMessage = NULL;
             netif.GetMac().SetChannel(mRestoreChannel);
