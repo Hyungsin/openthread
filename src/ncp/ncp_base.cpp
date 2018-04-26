@@ -53,6 +53,7 @@
 extern "C" {
     void openthread_lock_uart_buffer_mutex(void);
     void openthread_unlock_uart_buffer_mutex(void);
+    void wdt_clear(void);
 }
 
 namespace ot {
@@ -1086,6 +1087,8 @@ otError NcpBase::HandleCommand(uint8_t aHeader)
     unsigned int command;
 
     SuccessOrExit(error = mDecoder.ReadUintPacked(command));
+
+    wdt_clear();
 
     switch (command)
     {
