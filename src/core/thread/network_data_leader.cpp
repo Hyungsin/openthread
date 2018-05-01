@@ -428,7 +428,7 @@ void LeaderBase::SetNetworkData(uint8_t aVersion, uint8_t aStableVersion, bool a
     }
 
 #if ENABLE_DEBUG
-    printf("[OT-ND-Le] SetNetworkData\n");
+     otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_IP6, "[OT-ND-Le]: SetNetworkData\n");
 #endif
 
     otDumpDebgNetData(GetInstance(), "set network data", mTlvs, mLength);

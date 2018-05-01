@@ -86,7 +86,7 @@ void Leader::HandlePetition(Coap::Header &aHeader, Message &aMessage, const Ip6:
     otLogInfoMeshCoP(GetInstance(), "received petition");
 
 #if ENABLE_DEBUG
-    printf("[OT-Leader]: Rx Petition\n");
+    otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MESH_COP, "[OT-Leader]: Rx Petition\n");
 #endif
 
     SuccessOrExit(Tlv::GetTlv(aMessage, Tlv::kCommissionerId, sizeof(commissionerId), commissionerId));
@@ -160,7 +160,7 @@ otError Leader::SendPetitionResponse(const Coap::Header &aRequestHeader, const I
     SuccessOrExit(error = netif.GetCoap().SendMessage(*message, aMessageInfo));
 
 #if ENABLE_DEBUG
-    printf("[OT-Leader]: Tx Petition Response\n");
+    otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MESH_COP, "[OT-Leader]: Tx Petition Response\n");
 #endif
     otLogInfoMeshCoP(GetInstance(), "sent petition response");
 
@@ -191,7 +191,7 @@ void Leader::HandleKeepAlive(Coap::Header &aHeader, Message &aMessage, const Ip6
     otLogInfoMeshCoP(GetInstance(), "received keep alive");
 
 #if ENABLE_DEBUG
-    printf("[OT-Leader]: Rx Keep alive\n");
+    otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MESH_COP, "[OT-Leader]: Rx Keep alive\n");
 #endif
 
     SuccessOrExit(Tlv::GetTlv(aMessage, Tlv::kState, sizeof(state), state));
@@ -245,7 +245,7 @@ otError Leader::SendKeepAliveResponse(const Coap::Header &aRequestHeader, const 
 
     otLogInfoMeshCoP(GetInstance(), "sent keep alive response");
 #if ENABLE_DEBUG
-    printf("[OT-Leader]: Tx Keep alive\n");
+    otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MESH_COP, "[OT-Leader]: Tx Keep alive\n");
 #endif
 
 exit:
@@ -283,7 +283,7 @@ otError Leader::SendDatasetChanged(const Ip6::Address &aAddress)
     otLogInfoMeshCoP(GetInstance(), "sent dataset changed");
 
 #if ENABLE_DEBUG
-    printf("[OT-Leader]: Tx Dataset Changed\n");
+    otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MESH_COP, "[OT-Leader]: Tx Dataset Changed\n");
 #endif
 
 exit:
@@ -345,7 +345,7 @@ void Leader::ResignCommissioner(void)
 
     otLogInfoMeshCoP(GetInstance(), "commissioner inactive");
 #if ENABLE_DEBUG
-    printf("[OT-Leader]: Commissioner inactive\n");
+    otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MESH_COP, "[OT-Leader]: Commissioner inactive\n");
 #endif
 }
 

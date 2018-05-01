@@ -111,7 +111,7 @@ otError RssAverager::Add(int8_t aRss)
     }
 
 #if ENABLE_DEBUG
-    printf("[OT-LQ]: newRss %d, AvgRss %d, LQ %u\n", mLastRss, GetAverageRss(), mLinkQuality);
+    otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MLE, "[OT-LQ]: newRss %d, AvgRss %d, LQ %u\n", mLastRss, GetAverageRss(), mLinkQuality);
 #endif
 
 exit:

@@ -2756,7 +2756,9 @@ otError Mle::HandleLeaderData(const Message &aMessage, const Ip6::MessageInfo &a
     bool dataRequest = false;
     Tlv tlv;
 
-printf("[OT-MLE] Rx LeaderData\n");
+#if ENABLE_DEBUG
+    otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MLE, "[OT-MLE]: Rx LeaderData\n");
+#endif
 
     // Leader Data
     SuccessOrExit(error = Tlv::GetTlv(aMessage, Tlv::kLeaderData, sizeof(leaderData), leaderData));

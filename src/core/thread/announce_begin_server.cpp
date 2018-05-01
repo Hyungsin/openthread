@@ -123,7 +123,7 @@ void AnnounceBeginServer::HandleRequest(Coap::Header &aHeader, Message &aMessage
         SuccessOrExit(GetNetif().GetCoap().SendEmptyAck(aHeader, responseInfo));
         otLogInfoMeshCoP(GetInstance(), "sent announce begin response");
 #if ENABLE_DEBUG
-        printf("[OT-Announce-Beginner]: Tx Announce begin response\n");
+    otPlatLog(OT_LOG_LEVEL_INFO, OT_LOG_REGION_MESH_COP, "[OT-Ann-Beginner]: Tx Announce begin response\n");
 #endif
     }
 
