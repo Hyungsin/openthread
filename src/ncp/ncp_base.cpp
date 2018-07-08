@@ -29,7 +29,6 @@
  * @file
  *   This file implements general thread device required Spinel interface to the OpenThread stack.
  */
-
 #include "ncp_base.hpp"
 
 #include <stdarg.h>
@@ -53,7 +52,7 @@
 extern "C" {
     void openthread_lock_uart_buffer_mutex(void);
     void openthread_unlock_uart_buffer_mutex(void);
-    void wdt_clear(void);
+    //void wdt_clear(void);
 }
 
 namespace ot {
@@ -906,6 +905,8 @@ otError NcpBase::PrepareResponse(uint8_t aHeader, bool aIsLastStatus, bool aIsGe
     spinel_tid_t tid = SPINEL_HEADER_GET_TID(aHeader);
     ResponseEntry *entry;
 
+    //printf("TID %d\n", tid);
+
     if (tid == 0)
     {
         // No response is required for TID zero. But we may emit a
@@ -927,7 +928,6 @@ otError NcpBase::PrepareResponse(uint8_t aHeader, bool aIsLastStatus, bool aIsGe
         // dropped.
 
         mChangedPropsSet.AddLastStatus(SPINEL_STATUS_DROPPED);
-
         ExitNow(error = OT_ERROR_NO_BUFS);
     }
 
@@ -1086,9 +1086,10 @@ otError NcpBase::HandleCommand(uint8_t aHeader)
     otError error = OT_ERROR_NONE;
     unsigned int command;
 
+
     SuccessOrExit(error = mDecoder.ReadUintPacked(command));
 
-    wdt_clear();
+    //wdt_clear();
 
     switch (command)
     {
@@ -1104,6 +1105,7 @@ otError NcpBase::HandleCommand(uint8_t aHeader)
     case SPINEL_CMD_PROP_VALUE_SET:
     case SPINEL_CMD_PROP_VALUE_INSERT:
     case SPINEL_CMD_PROP_VALUE_REMOVE:
+        //printf("Prop->");
         error = CommandHandler_PROP_VALUE_update(aHeader, command);
         break;
 
@@ -1132,7 +1134,6 @@ otError NcpBase::HandleCommand(uint8_t aHeader)
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
 
     default:
-
 #if OPENTHREAD_ENABLE_NCP_VENDOR_HOOK
         if (command >= SPINEL_CMD_VENDOR__BEGIN && command < SPINEL_CMD_VENDOR__END)
         {
