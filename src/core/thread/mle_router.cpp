@@ -336,6 +336,7 @@ otError MleRouter::BecomeLeader(void)
     netif.GetLeader().SetEmptyCommissionerData();
 
     SuccessOrExit(error = SetStateLeader(GetRloc16(mRouterId)));
+printf("leader done 2\n");
 
 exit:
     return error;
@@ -1090,6 +1091,7 @@ otError MleRouter::HandleLinkAccept(const Message &aMessage, const Ip6::MessageI
         if (mLeaderData.GetLeaderRouterId() == GetRouterId(GetRloc16()))
         {
             SetStateLeader(GetRloc16());
+printf("leader done 1\n");
         }
         else
         {
